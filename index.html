@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Smart Dustbin Remote</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body { font-family: 'Segoe UI', Tahoma, sans-serif; background: linear-gradient(135deg, #0f2027, #203a43, #2c5364); color: white; padding: 20px; }
+    .container { max-width: 800px; margin: auto; }
+    h1 { text-align: center; margin-bottom: 20px; }
+    .card { background: rgba(255,255,255,0.1); backdrop-filter: blur(10px); border-radius: 20px; padding: 20px; margin: 15px 0; text-align: center; }
+    .card-value { font-size: 2.5rem; font-weight: bold; margin: 10px 0; }
+    .btn-group { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 20px; }
+    button { background: #00adb5; border: none; padding: 12px 24px; border-radius: 40px; color: white; font-size: 1rem; cursor: pointer; transition: 0.2s; }
+    button:hover { background: #007b7f; transform: scale(1.02); }
+    .status { font-size: 0.9rem; margin-top: 20px; text-align: center; }
+    .offline { color: #ff8888; }
+    .online { color: #88ff88; }
+    footer { text-align: center; margin-top: 30px; font-size: 0.8rem; opacity: 0.7; }
+  </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
+</head>
+<body>
+<div class="container">
+  <h1>🌍 Smart Dustbin Remote</h1>
+  <div id="connectionStatus" class="status">Connecting to MQTT...</div>
+  <div class="card">
+    <div>📦 Fill Level</div>
+    <div class="card-value" id="fill">--%</div>
+  </div>
+  <div class="card">
+    <div>💧 Moisture</div>
+    <div class="card-value" id="moisture">--</div>
+    <div>Type: <span id="wasteType">--</span></div>
+  </div>
+  <div class="card">
+    <div>🚪 Lid Status</div>
+    <div class="card-value" id="lid">--</div>
+  </div>
+  <div class="card">
+    <div>📊 Waste Counts</div>
+    <div class="card-value" id="counts">Wet: -- | Dry: --</div>
+  </div>
+  <div class="btn-group">
+    <button onclick="sendCommand('open_lid')">🔓 Open Lid</button>
+    <button onclick="sendCommand('close_lid')">🔒 Close Lid</button>
+    <button onclick="sendCommand('force_dry')">🍂 Force DRY</button>
+    <button onclick="sendCommand('force_wet')">💧 Force WET</button>
+    <button onclick="sendCommand('auto_on')">🤖 Auto ON</button>
+    <button onclick="sendCommand('auto_off')">👆 Auto OFF</button>
+  </div>
+  <footer>Cloud MQTT | Real‑time updates</footer>
+</div>
+<script>
+  // ------------------------- CONFIGURATION -------------------------
+  const brokerUrl = "f58d4207949a4e7bbf34417e1f687d1e.s1.eu.hivemq.cloud";
+  const username = "satyam";
+  const password = "Satyam2833";
+  // -----------------------------------------------------------------
+
+  const client = new Paho.MQTT.Client(brokerUrl, "web_" + Math.random());
+  client.connect({
+    userName: username,
+    password: password,
+    useSSL: true,
+    onSuccess: () => {
+      document.getElementById("connectionStatus").innerHTML = "✅ Connected to cloud broker";
+      document.getElementById("connectionStatus").className = "status online";
+      client.subscribe("dustbin/telemetry/fill");
+      client.subscribe("dustbin/telemetry/moisture");
+      client.subscribe("dustbin/telemetry/counts");
+      client.subscribe("dustbin/telemetry/status");
+    },
+    onFailure: (err) => {
+      document.getElementById("connectionStatus").innerHTML = "❌ Connection failed: " + err.errorMessage;
+      document.getElementById("connectionStatus").className = "status offline";
+    }
+  });
+
+  client.onMessageArrived = (message) => {
+    const topic = message.destinationName;
+    const data = JSON.parse(message.payloadString);
+    if (topic === "dustbin/telemetry/fill") {
+      document.getElementById("fill").innerText = data.fill + "%";
+      if (data.full) document.getElementById("fill").style.color = "#ff8888";
+      else document.getElementById("fill").style.color = "white";
+    } else if (topic === "dustbin/telemetry/moisture") {
+      document.getElementById("moisture").innerText = data.raw;
+      document.getElementById("wasteType").innerHTML = data.type === "wet" ? "💧 WET" : "🍂 DRY";
+    } else if (topic === "dustbin/telemetry/counts") {
+      document.getElementById("counts").innerHTML = `Wet: ${data.wet} | Dry: ${data.dry}`;
+    } else if (topic === "dustbin/telemetry/status") {
+      document.getElementById("lid").innerText = data.lid === "open" ? "OPEN" : "CLOSED";
+    }
+  };
+
+  function sendCommand(command) {
+    const msg = new Paho.MQTT.Message(JSON.stringify({ command: command }));
+    msg.destinationName = "dustbin/control/action";
+    client.send(msg);
+  }
+</script>
+</body>
+</html>
